@@ -31,7 +31,7 @@ class MainActivity : Activity() {
  private val worker = Executors.newSingleThreadExecutor()
  private var model: LlmInference? = null
  private val modelFile by lazy { File(filesDir,"gemma3-1b-it.task") }
- private val modelUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task?download=true"
+ private val modelUrl = "https://huggingface.co/typosbro/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task?download=true"
  private val prefs by lazy { getSharedPreferences("progress", MODE_PRIVATE) }
 
  override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,7 +77,7 @@ class MainActivity : Activity() {
     require(tmp.length()>500_000_000L){"File modello incompleto"}
     require(tmp.renameTo(modelFile)){"Impossibile salvare il modello"}
     runOnUiThread { status.text="Modello scaricato. La valutazione funziona offline." }
-   } catch(e:Exception) { tmp.delete();runOnUiThread { status.text="Download non riuscito: ${e.message}" } }
+   } catch(e:Exception) { tmp.delete();runOnUiThread { status.text="Download non riuscito (${e.javaClass.simpleName}): ${e.message}" } }
   }
  }
  private fun evaluate() {
