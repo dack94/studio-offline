@@ -38,8 +38,8 @@ class MainActivity : Activity() {
  private var recognizer: SpeechRecognizer? = null
  private val worker = Executors.newSingleThreadExecutor()
  private var model: LlmInference? = null
- private val modelFile by lazy { File(filesDir,"gemma3-1b-it.task") }
- private val modelUrl = "https://huggingface.co/typosbro/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task?download=true"
+ private val modelFile by lazy { File(filesDir,"qwen2.5-0.5b-q8.task") }
+ private val modelUrl = "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task?download=true"
  private val prefs by lazy { getSharedPreferences("progress", MODE_PRIVATE) }
 
  override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,7 +63,7 @@ class MainActivity : Activity() {
   root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference","Demo senza riferimento")+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
   root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
   root.addView(TextView(this).apply { text="Le domande predefinite sono dimostrative. Non sono ricavate dai tuoi PDF. Importa un pacchetto preparato e verificato prima di usare l’app per studiare.";textSize=13f })
-  root.addView(Button(this).apply { text="Scarica modello IA (555 MB, solo una volta)"; setOnClickListener { downloadModel() } })
+  root.addView(Button(this).apply { text="Scarica Qwen 2.5 0.5B (547 MB, solo una volta)"; setOnClickListener { downloadModel() } })
   result=TextView(this).apply { textSize=16f; setPadding(0,22,0,12); setTextColor(Color.rgb(40,48,41)) };root.addView(result)
   setContentView(ScrollView(this).apply { addView(root) })
   if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),100)
@@ -134,7 +134,7 @@ class MainActivity : Activity() {
   status.text="Generazione bozze in corso…"
   worker.execute {
    try {
-    if(model==null)model=LlmInference.createFromOptions(this,LlmInference.LlmInferenceOptions.builder().setModelPath(modelFile.absolutePath).setMaxTokens(1024).setMaxTopK(40).build())
+    if(model==null)model=LlmInference.createFromOptions(this,LlmInference.LlmInferenceOptions.builder().setModelPath(modelFile.absolutePath).setMaxTokens(1024).setMaxTopK(10).build())
     val draft=JSONArray()
     for(i in 0 until passages.length().coerceAtMost(8)){
      val p=passages.getJSONObject(i)
@@ -185,8 +185,8 @@ class MainActivity : Activity() {
  }
  private fun norm(s:String):String=Normalizer.normalize(s.lowercase(Locale.ITALIAN),Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"),"").replace(Regex("[^a-z0-9]+")," ").trim()
  private fun downloadModel() {
-  if(modelFile.exists() && modelFile.length()>500_000_000L) { status.text="Modello già presente. Pronto per valutare.";return }
-  status.text="Scaricamento IA in corso (circa 555 MB)…"
+  if(modelFile.exists() && modelFile.length()>520_000_000L) { status.text="Modello già presente. Pronto per valutare.";return }
+  status.text="Scaricamento IA in corso (circa 547 MB)…"
   worker.execute {
    val tmp=File(filesDir,"model.tmp")
    try {
@@ -198,7 +198,7 @@ class MainActivity : Activity() {
       if(total%(20L*1024*1024)<65536) runOnUiThread { status.text="Modello: ${total/(1024*1024)} MB scaricati" }
      }
     }}
-    require(tmp.length()>500_000_000L){"File modello incompleto"}
+    require(tmp.length()>520_000_000L){"File modello incompleto"}
     require(tmp.renameTo(modelFile)){"Impossibile salvare il modello"}
     runOnUiThread { status.text="Modello scaricato. La valutazione funziona offline." }
    } catch(e:Exception) { tmp.delete();runOnUiThread { status.text="Download non riuscito (${e.javaClass.simpleName}): ${e.message}" } }
@@ -207,7 +207,7 @@ class MainActivity : Activity() {
  private fun evaluate() {
   val response=answer.text.toString().trim()
   if(response.isEmpty()){Toast.makeText(this,"Inserisci una risposta",Toast.LENGTH_SHORT).show();return}
-  if(!modelFile.exists()) { result.text="Scarica prima il modello IA. Dopo il download la valutazione è offline.";return }
+  if(!modelFile.exists()) { result.text="Scarica prima Qwen 2.5. Dopo il download la valutazione è offline.";return }
   val q=questions.getJSONObject(index)
   if(!importedPack){result.text="Valutazione disabilitata per le domande demo: importa un pacchetto con risposte e fonti verificate.";return}
   val reference=q.getString("reference")
