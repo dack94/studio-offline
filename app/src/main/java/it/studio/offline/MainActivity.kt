@@ -213,6 +213,11 @@ class MainActivity : Activity() {
   val reference=if(importedPack)q.getString("reference") else (0 until q.getJSONArray("concepts").length()).joinToString("; ") { q.getJSONArray("concepts").getJSONObject(it).getString("label") }
   val source=if(importedPack)q.getString("source") else "Chiave delle domande dimostrative integrata nell’app (non tratta da PDF)"
   val question=q.getString("question")
+  val generic=setOf("e cosi che funziona","non lo so","boh","non saprei","ok","ciao","si","no","non ricordo","non ho capito")
+  if(norm(response) in generic || response.length<5) {
+   result.text="RISPOSTA NON PERTINENTE\\nLa risposta non contiene elementi anatomici valutabili.\\n\\nRisposta di riferimento: $reference\\nFonte: $source"
+   return
+  }
   val evidence=(0 until passages.length()).map {passages.getJSONObject(it)}.map { p ->
    val terms=norm(question).split(" ").filter {it.length>4}
    p to terms.count { norm(p.getString("text")).contains(it) }
@@ -237,8 +242,11 @@ CONTRADDIZIONI: affermazioni in contrasto con la risposta di riferimento
 FONTE: $source
 Se non puoi stabilire un confronto attendibile, usa NON VALUTABILE."""
     val evaluation=model!!.generateResponse(prompt)
-    val valid=Regex("ESITO:\\s*(COERENTE|PARZIALE|CONTRADDITTORIA|NON VALUTABILE)").containsMatchIn(evaluation)
-    runOnUiThread { result.text=(if(valid)evaluation else "NON VALUTABILE: il modello non ha rispettato il formato richiesto.")+"\n\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
+    val valid=Regex("ESITO:\\s*(COERENTE|PARZIALE|CONTRADDITORIA|NON VALUTABILE)",RegexOption.IGNORE_CASE).containsMatchIn(evaluation)
+    runOnUiThread {
+     result.text=(if(valid)evaluation else "VALUTAZIONE IA NON DISPONIBILE: Qwen non ha restituito un giudizio strutturato. Non significa che la tua risposta sia sbagliata.\\n\\nRisposta del modello (da verificare): "+evaluation.take(1200))+
+      "\\n\\nRisposta di riferimento: $reference\\nFonte: $source\\n\\nVerifica sempre il riferimento: la valutazione automatica può sbagliare."
+    }
    }catch(e:Exception) { runOnUiThread { result.text="Errore IA locale: ${e.message}\\nVerifica memoria libera e compatibilità del tablet." } }
   }
  }
