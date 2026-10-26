@@ -60,9 +60,9 @@ class MainActivity : Activity() {
   root.addView(Button(this).apply { text="Importa PDF";setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE) },importPdfCode) } })
   root.addView(Button(this).apply { text="Genera domande dal PDF (bozze)";setOnClickListener { generateDrafts() } })
   root.addView(Button(this).apply { text="Rivedi e approva bozze";setOnClickListener { reviewDrafts() } })
-  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference","Demo senza riferimento")+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
+  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference",(0 until q.optJSONArray("concepts")!!.length()).joinToString("; ") { q.getJSONArray("concepts").getJSONObject(it).getString("label") })+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
   root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
-  root.addView(TextView(this).apply { text="Le domande predefinite sono dimostrative. Non sono ricavate dai tuoi PDF. Importa un pacchetto preparato e verificato prima di usare l’app per studiare.";textSize=13f })
+  root.addView(TextView(this).apply { text="Le domande predefinite si possono valutare con Qwen usando la chiave di risposta integrata; non sono ricavate dai tuoi PDF. La valutazione è indicativa, verifica sempre la correttezza.";textSize=13f })
   root.addView(Button(this).apply { text="Scarica Qwen 2.5 0.5B (547 MB, solo una volta)"; setOnClickListener { downloadModel() } })
   result=TextView(this).apply { textSize=16f; setPadding(0,22,0,12); setTextColor(Color.rgb(40,48,41)) };root.addView(result)
   setContentView(ScrollView(this).apply { addView(root) })
@@ -181,7 +181,7 @@ class MainActivity : Activity() {
   title.text=q.getString("question")
   answer.setText("");result.text=""
   val due=prefs.getLong("due_$index",0L)
-  status.text="Domanda ${index+1}/${questions.length()} · ${if(importedPack) "Pacchetto importato" else "Demo non verificata"} · ${if(due>0 && due<=System.currentTimeMillis()) "Ripasso in scadenza" else "Allenamento"}"
+  status.text="Domanda ${index+1}/${questions.length()} · ${if(importedPack) "Pacchetto importato" else "Demo · chiave integrata"} · ${if(due>0 && due<=System.currentTimeMillis()) "Ripasso in scadenza" else "Allenamento"}"
  }
  private fun norm(s:String):String=Normalizer.normalize(s.lowercase(Locale.ITALIAN),Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"),"").replace(Regex("[^a-z0-9]+")," ").trim()
  private fun downloadModel() {
@@ -209,9 +209,9 @@ class MainActivity : Activity() {
   if(response.isEmpty()){Toast.makeText(this,"Inserisci una risposta",Toast.LENGTH_SHORT).show();return}
   if(!modelFile.exists()) { result.text="Scarica prima Qwen 2.5. Dopo il download la valutazione è offline.";return }
   val q=questions.getJSONObject(index)
-  if(!importedPack){result.text="Valutazione disabilitata per le domande demo: importa un pacchetto con risposte e fonti verificate.";return}
-  val reference=q.getString("reference")
-  val source=q.getString("source")
+
+  val reference=if(importedPack)q.getString("reference") else (0 until q.getJSONArray("concepts").length()).joinToString("; ") { q.getJSONArray("concepts").getJSONObject(it).getString("label") }
+  val source=if(importedPack)q.getString("source") else "Chiave delle domande dimostrative integrata nell’app (non tratta da PDF)"
   val question=q.getString("question")
   val evidence=(0 until passages.length()).map {passages.getJSONObject(it)}.map { p ->
    val terms=norm(question).split(" ").filter {it.length>4}
