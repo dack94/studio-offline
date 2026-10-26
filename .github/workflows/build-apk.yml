@@ -5,6 +5,7 @@ on:
     branches: [main]
 permissions:
   contents: read
+  issues: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -16,6 +17,8 @@ jobs:
           java-version: '17'
       - name: Prepare Android SDK
         run: |
+          set -o pipefail
+          exec > >(tee -a build-log.txt) 2>&1
           SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
@@ -30,7 +33,18 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Compila APK debug installabile
-        run: gradle --no-daemon :app:assembleDebug
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:assembleDebug 2>&1 | tee -a build-log.txt
+      - name: Report build failure to GitHub issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf 'Run: %s\nCommit: %s\n\n```\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" "$GITHUB_SHA" > failure-report.md
+          if [ -f build-log.txt ]; then tail -n 120 build-log.txt >> failure-report.md; else echo 'No build log generated' >> failure-report.md; fi
+          printf '\n```\n' >> failure-report.md
+          gh issue create --title "Android build failed: run $GITHUB_RUN_ID" --body-file failure-report.md || true
       - name: Pubblica APK
         uses: actions/upload-artifact@v4
         with:
