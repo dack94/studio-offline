@@ -59,7 +59,8 @@ class MainActivity : Activity() {
   root.addView(buttons)
   root.addView(Button(this).apply { text="Importa PDF";setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE) },importPdfCode) } })
   root.addView(Button(this).apply { text="Genera domande dal PDF (bozze)";setOnClickListener { generateDrafts() } })
-  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this).setTitle("Fonte").setMessage(q.optString("reference","Demo senza riferimento")+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
+  root.addView(Button(this).apply { text="Rivedi e approva bozze";setOnClickListener { reviewDrafts() } })
+  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference","Demo senza riferimento")+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
   root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
   root.addView(TextView(this).apply { text="Le domande predefinite sono dimostrative. Non sono ricavate dai tuoi PDF. Importa un pacchetto preparato e verificato prima di usare l’app per studiare.";textSize=13f })
   root.addView(Button(this).apply { text="Scarica modello IA (555 MB, solo una volta)"; setOnClickListener { downloadModel() } })
@@ -148,6 +149,33 @@ class MainActivity : Activity() {
    }catch(e:Exception){runOnUiThread {status.text="Generazione fallita: ${e.message}"}}
   }
  }
+
+ private fun reviewDrafts() {
+  val file=File(filesDir,"draft-pack.json")
+  if(!file.exists()){status.text="Non ci sono bozze. Importa un PDF e genera domande.";return}
+  val drafts=try{JSONArray(file.readText())}catch(e:Exception){status.text="Bozze non leggibili";return}
+  if(drafts.length()==0){status.text="Nessuna bozza da rivedere";return}
+  fun reviewAt(i:Int) {
+   if(i>=drafts.length()) {status.text="Revisione completata";return}
+   val q=drafts.getJSONObject(i)
+   val editor=EditText(this).apply {setText(q.getString("reference"));minLines=3;maxLines=8}
+   AlertDialog.Builder(this).setTitle("Verifica risposta ${i+1}/${drafts.length()}")
+    .setMessage(q.getString("question")+"\\nFonte: "+q.getString("source")+"\\nControlla sul PDF originale prima di approvare.")
+    .setView(editor)
+    .setPositiveButton("Approva") {_,_->
+     val corrected=editor.text.toString().trim()
+     if(corrected.isNotBlank()){
+      val saved=File(filesDir,"study-pack.json")
+      val pack=if(saved.exists())try{JSONArray(saved.readText())}catch(_:Exception){JSONArray()}else JSONArray()
+      pack.put(JSONObject().put("question",q.getString("question")).put("reference",corrected).put("source",q.getString("source")).put("verified",true))
+      saved.writeText(pack.toString());questions=pack;importedPack=true;index=0;render()
+     }
+     reviewAt(i+1)
+    }.setNegativeButton("Scarta"){_,_->reviewAt(i+1)}
+    .setNeutralButton("Interrompi",null).show()
+  }
+  reviewAt(0)
+ }
  private fun render() {
   val q=questions.getJSONObject(index)
   title.text=q.getString("question")
@@ -185,6 +213,10 @@ class MainActivity : Activity() {
   val reference=q.getString("reference")
   val source=q.getString("source")
   val question=q.getString("question")
+  val evidence=(0 until passages.length()).map {passages.getJSONObject(it)}.map { p ->
+   val terms=norm(question).split(" ").filter {it.length>4}
+   p to terms.count { norm(p.getString("text")).contains(it) }
+  }.filter {it.second>0}.sortedByDescending {it.second}.take(2).map {it.first.getString("text").take(700)}
   result.text="L'IA sta valutando la risposta sul tablet…"
   worker.execute {
    try {
@@ -194,6 +226,7 @@ class MainActivity : Activity() {
 DOMANDA: $question
 RISPOSTA DI RIFERIMENTO: $reference
 FONTE: $source
+ESTRATTI DEI PDF (contesto non verificato): ${evidence.joinToString(" | ")}
 RISPOSTA DELLO STUDENTE: $response
 Confronta il significato, accetta sinonimi e parafrasi SOLO se il significato è inequivocabilmente equivalente. Se la risposta è incomprensibile o ambigua, scrivi NON VALUTABILE. Non inventare correzioni o classificazioni. Non assegnare voti numerici.
 Formato obbligatorio:
@@ -204,7 +237,8 @@ CONTRADDIZIONI: affermazioni in contrasto con la risposta di riferimento
 FONTE: $source
 Se non puoi stabilire un confronto attendibile, usa NON VALUTABILE."""
     val evaluation=model!!.generateResponse(prompt)
-    runOnUiThread { result.text=evaluation+"\n\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
+    val valid=Regex("ESITO:\\s*(COERENTE|PARZIALE|CONTRADDITTORIA|NON VALUTABILE)").containsMatchIn(evaluation)
+    runOnUiThread { result.text=(if(valid)evaluation else "NON VALUTABILE: il modello non ha rispettato il formato richiesto.")+"\n\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
    }catch(e:Exception) { runOnUiThread { result.text="Errore IA locale: ${e.message}\\nVerifica memoria libera e compatibilità del tablet." } }
   }
  }
