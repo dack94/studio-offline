@@ -7,4 +7,4 @@ android {
  kotlinOptions { jvmTarget = "17" }
 }
 
-dependencies { implementation("com.google.mediapipe:tasks-genai:0.10.27") }
+dependencies { implementation("com.google.mediapipe:tasks-genai:0.10.27"); implementation("com.tom-roush:pdfbox-android:2.0.27.0") }
