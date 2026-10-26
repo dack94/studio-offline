@@ -1,0 +1,168 @@
+[
+  {
+    "question": "Quali sono i rami viscerali impari dell'aorta addominale?",
+    "concepts": [
+      {
+        "label": "tronco celiaco",
+        "alternatives": [
+          "tronco celiaco"
+        ]
+      },
+      {
+        "label": "mesenterica superiore",
+        "alternatives": [
+          "mesenterica superiore"
+        ]
+      },
+      {
+        "label": "mesenterica inferiore",
+        "alternatives": [
+          "mesenterica inferiore"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quali sono i rami viscerali pari dell'aorta addominale?",
+    "concepts": [
+      {
+        "label": "surrenali medie",
+        "alternatives": [
+          "surrenali medie",
+          "surrenale media"
+        ]
+      },
+      {
+        "label": "arterie renali",
+        "alternatives": [
+          "arterie renali",
+          "arteria renale"
+        ]
+      },
+      {
+        "label": "gonadiche",
+        "alternatives": [
+          "gonadiche",
+          "testicolari",
+          "ovariche"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quali sono i tre rami del tronco celiaco?",
+    "concepts": [
+      {
+        "label": "gastrica sinistra",
+        "alternatives": [
+          "gastrica sinistra",
+          "gastrica di sinistra"
+        ]
+      },
+      {
+        "label": "epatica comune",
+        "alternatives": [
+          "epatica comune"
+        ]
+      },
+      {
+        "label": "splenica",
+        "alternatives": [
+          "splenica",
+          "lienale"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quali sono i rami parietali dell'aorta toracica?",
+    "concepts": [
+      {
+        "label": "intercostali posteriori",
+        "alternatives": [
+          "intercostali posteriori"
+        ]
+      },
+      {
+        "label": "sottocostale",
+        "alternatives": [
+          "sottocostale"
+        ]
+      },
+      {
+        "label": "freniche superiori",
+        "alternatives": [
+          "freniche superiori"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Da quali arterie originano le arterie surrenali superiori, medie e inferiori?",
+    "concepts": [
+      {
+        "label": "superiori dalle freniche inferiori",
+        "alternatives": [
+          "superiori dalle freniche inferiori",
+          "superiori originano dalle freniche inferiori"
+        ]
+      },
+      {
+        "label": "medie dall aorta",
+        "alternatives": [
+          "medie dall aorta",
+          "medie originano dall aorta"
+        ]
+      },
+      {
+        "label": "inferiori dalle renali",
+        "alternatives": [
+          "inferiori dalle renali",
+          "inferiori dall arteria renale"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "A che livello vertebrale l'aorta toracica attraversa il diaframma?",
+    "concepts": [
+      {
+        "label": "t12",
+        "alternatives": [
+          "t12",
+          "dodicesima vertebra toracica"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "A quale livello l'aorta addominale si divide nelle iliache comuni?",
+    "concepts": [
+      {
+        "label": "l4",
+        "alternatives": [
+          "l4",
+          "quarta vertebra lombare"
+        ]
+      }
+    ]
+  },
+  {
+    "question": "Quali sono i due rami terminali dell'arteria gastroduodenale riportati negli appunti?",
+    "concepts": [
+      {
+        "label": "pancreaticoduodenale superiore anteriore",
+        "alternatives": [
+          "pancreaticoduodenale superiore anteriore"
+        ]
+      },
+      {
+        "label": "gastroepiploica destra",
+        "alternatives": [
+          "gastroepiploica destra",
+          "gastroepiploica di destra"
+        ]
+      }
+    ]
+  }
+]
