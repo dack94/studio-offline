@@ -19,10 +19,16 @@ import java.net.URL
 import java.util.concurrent.Executors
 import java.text.Normalizer
 import java.util.Locale
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
+import org.json.JSONObject
 
 class MainActivity : Activity() {
  private lateinit var questions: JSONArray
  private val importPackCode = 202
+ private val importPdfCode = 203
+ private var passages=JSONArray()
  private var importedPack = false
  private var index = 0
  private lateinit var status: TextView
@@ -38,7 +44,10 @@ class MainActivity : Activity() {
 
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
+  PDFBoxResourceLoader.init(applicationContext)
   questions = loadPack()
+  val saved=File(filesDir,"passages.json")
+  if(saved.exists()) try { passages=JSONArray(saved.readText()) }catch(_:Exception){}
   val root = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,30,24,24); setBackgroundColor(Color.rgb(247,245,240)) }
   root.addView(TextView(this).apply { text="STUDIO  /  OFFLINE"; textSize=14f; setTextColor(Color.rgb(95,109,91)); typeface=Typeface.DEFAULT_BOLD })
   status=TextView(this).apply { textSize=14f; setPadding(0,20,0,20) }; root.addView(status)
@@ -48,6 +57,9 @@ class MainActivity : Activity() {
   fun btn(label:String, action:()->Unit) { buttons.addView(Button(this).apply { text=label; setOnClickListener { action() } }, LinearLayout.LayoutParams(0,-2,1f)) }
   btn("Parla") { startSpeech() }; btn("Valuta") { evaluate() }; btn("Avanti") { index=(index+1)%questions.length();render() }
   root.addView(buttons)
+  root.addView(Button(this).apply { text="Importa PDF";setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE) },importPdfCode) } })
+  root.addView(Button(this).apply { text="Genera domande dal PDF (bozze)";setOnClickListener { generateDrafts() } })
+  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this).setTitle("Fonte").setMessage(q.optString("reference","Demo senza riferimento")+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
   root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
   root.addView(TextView(this).apply { text="Le domande predefinite sono dimostrative. Non sono ricavate dai tuoi PDF. Importa un pacchetto preparato e verificato prima di usare l’app per studiare.";textSize=13f })
   root.addView(Button(this).apply { text="Scarica modello IA (555 MB, solo una volta)"; setOnClickListener { downloadModel() } })
@@ -68,7 +80,9 @@ class MainActivity : Activity() {
  @Deprecated("Used for Android document picker result")
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
   super.onActivityResult(requestCode,resultCode,data)
-  if(requestCode!=importPackCode || resultCode!=RESULT_OK) return
+  if(resultCode!=RESULT_OK) return
+  if(requestCode==importPdfCode){importPdf(data);return}
+  if(requestCode!=importPackCode)return
   try {
    val uri=data?.data ?: error("File non selezionato")
    val raw=contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: error("File non leggibile")
@@ -82,6 +96,57 @@ class MainActivity : Activity() {
    questions=pack;importedPack=true;index=0;render()
    status.text="Pacchetto importato: ${pack.length()} domande. Controlla che le fonti siano corrette."
   }catch(e:Exception){status.text="Importazione non riuscita: ${e.message}"}
+ }
+
+ private fun importPdf(data:Intent?) {
+  val uri=data?.data?:return
+  status.text="Estrazione del testo PDF in corso…"
+  worker.execute {
+   try {
+    val tmp=File(cacheDir,"import.pdf")
+    contentResolver.openInputStream(uri)?.use { it.copyTo(tmp.outputStream()) }?:error("PDF non leggibile")
+    val chunks=JSONArray()
+    PDDocument.load(tmp).use { doc ->
+     require(!doc.isEncrypted){"PDF protetto"}
+     val stripper=PDFTextStripper()
+     for(page in 1..doc.numberOfPages) {
+      stripper.startPage=page;stripper.endPage=page
+      val pageText=stripper.getText(doc).replace(Regex("\\s+")," ").trim()
+      var offset=0
+      while(offset<pageText.length) {
+       chunks.put(JSONObject().put("text",pageText.substring(offset,(offset+1100).coerceAtMost(pageText.length))).put("source",uri.lastPathSegment?:"PDF").put("page",page))
+       offset+=1100
+      }
+     }
+    }
+    require(chunks.length()>0){"Nessun testo estraibile: i PDF scannerizzati richiedono OCR"}
+    for(i in 0 until chunks.length())passages.put(chunks.getJSONObject(i))
+    File(filesDir,"passages.json").writeText(passages.toString())
+    tmp.delete()
+    runOnUiThread { status.text="PDF indicizzato offline: ${chunks.length()} passaggi. Genera le domande e verifica le bozze." }
+   }catch(e:Exception){runOnUiThread {status.text="Errore PDF: ${e.message}"}}
+  }
+ }
+ private fun generateDrafts() {
+  if(passages.length()==0){status.text="Importa prima un PDF";return}
+  if(!modelFile.exists()){status.text="Scarica prima il modello IA";return}
+  status.text="Generazione bozze in corso…"
+  worker.execute {
+   try {
+    if(model==null)model=LlmInference.createFromOptions(this,LlmInference.LlmInferenceOptions.builder().setModelPath(modelFile.absolutePath).setMaxTokens(1024).setMaxTopK(40).build())
+    val draft=JSONArray()
+    for(i in 0 until passages.length().coerceAtMost(8)){
+     val p=passages.getJSONObject(i)
+     val prompt="Crea UNA domanda e risposta ESCLUSIVAMENTE da questo testo. Scrivi due righe: DOMANDA: ... e RISPOSTA: ...\\n"+p.getString("text")
+     val output=model!!.generateResponse(prompt)
+     val q=Regex("DOMANDA:([^\\n]+)").find(output)?.groupValues?.get(1)?.trim()
+     val a=Regex("RISPOSTA:([^\\n]+)").find(output)?.groupValues?.get(1)?.trim()
+     if(!q.isNullOrBlank()&&!a.isNullOrBlank())draft.put(JSONObject().put("question",q).put("reference",a).put("source",p.getString("source")+" pagina "+p.getInt("page")).put("verified",false))
+    }
+    File(filesDir,"draft-pack.json").writeText(draft.toString())
+    runOnUiThread {status.text="Create ${draft.length()} bozze NON verificate. Non sono abilitate alla valutazione: occorre controllarle con gli appunti."}
+   }catch(e:Exception){runOnUiThread {status.text="Generazione fallita: ${e.message}"}}
+  }
  }
  private fun render() {
   val q=questions.getJSONObject(index)
@@ -139,7 +204,7 @@ CONTRADDIZIONI: affermazioni in contrasto con la risposta di riferimento
 FONTE: $source
 Se non puoi stabilire un confronto attendibile, usa NON VALUTABILE."""
     val evaluation=model!!.generateResponse(prompt)
-    runOnUiThread { result.text=evaluation+"\\n\\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
+    runOnUiThread { result.text=evaluation+"\n\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
    }catch(e:Exception) { runOnUiThread { result.text="Errore IA locale: ${e.message}\\nVerifica memoria libera e compatibilità del tablet." } }
   }
  }
