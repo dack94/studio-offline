@@ -22,6 +22,8 @@ import java.util.Locale
 
 class MainActivity : Activity() {
  private lateinit var questions: JSONArray
+ private val importPackCode = 202
+ private var importedPack = false
  private var index = 0
  private lateinit var status: TextView
  private lateinit var title: TextView
@@ -36,7 +38,7 @@ class MainActivity : Activity() {
 
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
-  questions = JSONArray(assets.open("questions.json").bufferedReader().use { it.readText() })
+  questions = loadPack()
   val root = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,30,24,24); setBackgroundColor(Color.rgb(247,245,240)) }
   root.addView(TextView(this).apply { text="STUDIO  /  OFFLINE"; textSize=14f; setTextColor(Color.rgb(95,109,91)); typeface=Typeface.DEFAULT_BOLD })
   status=TextView(this).apply { textSize=14f; setPadding(0,20,0,20) }; root.addView(status)
@@ -46,18 +48,47 @@ class MainActivity : Activity() {
   fun btn(label:String, action:()->Unit) { buttons.addView(Button(this).apply { text=label; setOnClickListener { action() } }, LinearLayout.LayoutParams(0,-2,1f)) }
   btn("Parla") { startSpeech() }; btn("Valuta") { evaluate() }; btn("Avanti") { index=(index+1)%questions.length();render() }
   root.addView(buttons)
+  root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
+  root.addView(TextView(this).apply { text="Le domande predefinite sono dimostrative. Non sono ricavate dai tuoi PDF. Importa un pacchetto preparato e verificato prima di usare l’app per studiare.";textSize=13f })
   root.addView(Button(this).apply { text="Scarica modello IA (555 MB, solo una volta)"; setOnClickListener { downloadModel() } })
   result=TextView(this).apply { textSize=16f; setPadding(0,22,0,12); setTextColor(Color.rgb(40,48,41)) };root.addView(result)
   setContentView(ScrollView(this).apply { addView(root) })
   if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),100)
   render()
  }
+ private fun loadPack(): JSONArray {
+  val saved=File(filesDir,"study-pack.json")
+  if(saved.exists()) try {
+   val parsed=JSONArray(saved.readText())
+   if(parsed.length()>0) { importedPack=true;return parsed }
+  }catch(_:Exception){}
+  importedPack=false
+  return JSONArray(assets.open("questions.json").bufferedReader().use { it.readText() })
+ }
+ @Deprecated("Used for Android document picker result")
+ override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+  super.onActivityResult(requestCode,resultCode,data)
+  if(requestCode!=importPackCode || resultCode!=RESULT_OK) return
+  try {
+   val uri=data?.data ?: error("File non selezionato")
+   val raw=contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: error("File non leggibile")
+   val pack=JSONArray(raw)
+   require(pack.length()>0){"Pacchetto vuoto"}
+   for(i in 0 until pack.length()) {
+    val q=pack.getJSONObject(i)
+    require(q.getString("question").isNotBlank() && q.getString("reference").isNotBlank() && q.getString("source").isNotBlank()){"Domanda ${i+1}: mancano question, reference o source"}
+   }
+   File(filesDir,"study-pack.json").writeText(raw)
+   questions=pack;importedPack=true;index=0;render()
+   status.text="Pacchetto importato: ${pack.length()} domande. Controlla che le fonti siano corrette."
+  }catch(e:Exception){status.text="Importazione non riuscita: ${e.message}"}
+ }
  private fun render() {
   val q=questions.getJSONObject(index)
   title.text=q.getString("question")
   answer.setText("");result.text=""
   val due=prefs.getLong("due_$index",0L)
-  status.text="Domanda ${index+1}/${questions.length()} · ${if(due>0 && due<=System.currentTimeMillis()) "Ripasso in scadenza" else "Allenamento"}"
+  status.text="Domanda ${index+1}/${questions.length()} · ${if(importedPack) "Pacchetto importato" else "Demo non verificata"} · ${if(due>0 && due<=System.currentTimeMillis()) "Ripasso in scadenza" else "Allenamento"}"
  }
  private fun norm(s:String):String=Normalizer.normalize(s.lowercase(Locale.ITALIAN),Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"),"").replace(Regex("[^a-z0-9]+")," ").trim()
  private fun downloadModel() {
@@ -85,33 +116,30 @@ class MainActivity : Activity() {
   if(response.isEmpty()){Toast.makeText(this,"Inserisci una risposta",Toast.LENGTH_SHORT).show();return}
   if(!modelFile.exists()) { result.text="Scarica prima il modello IA. Dopo il download la valutazione è offline.";return }
   val q=questions.getJSONObject(index)
-  val concepts=q.getJSONArray("concepts")
-  val reference=(0 until concepts.length()).joinToString("; ") { concepts.getJSONObject(it).getString("label") }
+  if(!importedPack){result.text="Valutazione disabilitata per le domande demo: importa un pacchetto con risposte e fonti verificate.";return}
+  val reference=q.getString("reference")
+  val source=q.getString("source")
   val question=q.getString("question")
   result.text="L'IA sta valutando la risposta sul tablet…"
   worker.execute {
    try {
     if(model==null) model=LlmInference.createFromOptions(this,
       LlmInference.LlmInferenceOptions.builder().setModelPath(modelFile.absolutePath).setMaxTokens(1024).setMaxTopK(40).build())
-    val prompt="""Sei un esaminatore di anatomia umana. Valuta rigorosamente la risposta dello studente in italiano.
+    val prompt="""Sei un confrontatore di testi, non un esperto di anatomia. Devi usare ESCLUSIVAMENTE la risposta di riferimento. Non aggiungere alcuna informazione esterna.
 DOMANDA: $question
-ELEMENTI ATTESI: $reference
+RISPOSTA DI RIFERIMENTO: $reference
+FONTE: $source
 RISPOSTA DELLO STUDENTE: $response
-Non premiare termini presenti in frasi negate o in relazioni anatomicamente errate. Non inventare errori. Se la risposta è equivalente con sinonimi considerala corretta.
-Rispondi con questo formato:
-VOTO: numero da 0 a 100
-CORRETTO: elementi corretti
-ERRORI: errori fattuali o "nessuno"
-MANCANTE: elementi essenziali non citati
-SPIEGAZIONE: due frasi concise."""
+Confronta il significato, accetta sinonimi e parafrasi SOLO se il significato è inequivocabilmente equivalente. Se la risposta è incomprensibile o ambigua, scrivi NON VALUTABILE. Non inventare correzioni o classificazioni. Non assegnare voti numerici.
+Formato obbligatorio:
+ESITO: COERENTE / PARZIALE / CONTRADDITTORIA / NON VALUTABILE
+PRESENTE: concetti riconoscibili e supportati dalla risposta di riferimento
+MANCANTE: concetti richiesti ma non espressi
+CONTRADDIZIONI: affermazioni in contrasto con la risposta di riferimento
+FONTE: $source
+Se non puoi stabilire un confronto attendibile, usa NON VALUTABILE."""
     val evaluation=model!!.generateResponse(prompt)
-    val match=Regex("VOTO\\s*:\\s*(\\d{1,3})").find(evaluation)
-    val score=match?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0,100)
-    if(score!=null) {
-     val days=when {score>=90->7;score>=60->3;else->1}
-     prefs.edit().putLong("due_$index",System.currentTimeMillis()+days*86400000L).putInt("score_$index",score).apply()
-    }
-    runOnUiThread { result.text=evaluation+"\\n\\nValutazione automatica: verifica sempre i dettagli anatomici.";if(score!=null)scheduleReminder() }
+    runOnUiThread { result.text=evaluation+"\\n\\nRiscontro automatico non certificato: verifica sempre il testo della fonte. Nessun voto viene attribuito automaticamente." }
    }catch(e:Exception) { runOnUiThread { result.text="Errore IA locale: ${e.message}\\nVerifica memoria libera e compatibilità del tablet." } }
   }
  }
