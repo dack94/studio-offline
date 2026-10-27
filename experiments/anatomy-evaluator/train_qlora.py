@@ -12,9 +12,9 @@ def main():
     a=p.parse_args()
     import torch
     from datasets import Dataset
-    from transformers import AutoTokenizer,AutoModelForCausalLM,BitsAndBytesConfig,TrainingArguments
+    from transformers import AutoTokenizer,AutoModelForCausalLM,BitsAndBytesConfig
     from peft import LoraConfig
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU required for this QLoRA training script")
     rows=[json.loads(s) for s in Path(a.data).read_text(encoding="utf-8").splitlines() if s.strip()]
@@ -25,8 +25,8 @@ def main():
     def format_row(row):
         prompt=("Valuta la risposta dello studente esclusivamente rispetto al riferimento. "
                 "Restituisci solo JSON con correct, missing, incorrect, outcome. "
-                "Non inventare fatti non presenti nel riferimento.\\n"
-                f"DOMANDA: {row['question']}\\nRIFERIMENTO: {row['reference']}\\n"
+                "Non inventare fatti non presenti nel riferimento.\n"
+                f"DOMANDA: {row['question']}\nRIFERIMENTO: {row['reference']}\n"
                 f"RISPOSTA: {row['student_answer']}")
         messages=[{"role":"system","content":"Sei un valutatore rigoroso di risposte orali di anatomia."},
                   {"role":"user","content":prompt},
@@ -39,12 +39,12 @@ def main():
     model.config.use_cache=False
     lora=LoraConfig(r=16,lora_alpha=32,lora_dropout=0.05,bias="none",task_type="CAUSAL_LM",
                     target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"])
-    args=TrainingArguments(output_dir=a.output,num_train_epochs=a.epochs,
+    args=SFTConfig(output_dir=a.output,num_train_epochs=a.epochs,
         per_device_train_batch_size=1,gradient_accumulation_steps=8,learning_rate=1e-4,
         logging_steps=10,save_strategy="epoch",report_to="none",fp16=True,
-        gradient_checkpointing=True,seed=42)
+        gradient_checkpointing=True,seed=42,max_length=1024,dataset_text_field="text")
     trainer=SFTTrainer(model=model,args=args,train_dataset=ds,peft_config=lora,
-                       processing_class=tokenizer,dataset_text_field="text",max_length=1024)
+                       processing_class=tokenizer)
     trainer.train()
     trainer.save_model(a.output)
     tokenizer.save_pretrained(a.output)
