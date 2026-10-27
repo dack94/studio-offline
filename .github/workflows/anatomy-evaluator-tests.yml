@@ -18,3 +18,17 @@ jobs:
 
       - name: Compile experiment Python scripts
         run: python -m compileall -q experiments/anatomy-evaluator
+
+      - name: Generate and validate synthetic seed data
+        run: |
+          python experiments/anatomy-evaluator/generate_synthetic.py --output /tmp/anatomy-synthetic.jsonl
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [json.loads(s) for s in Path('/tmp/anatomy-synthetic.jsonl').read_text().splitlines()]
+          assert len(rows) == 48, len(rows)
+          assert len({r['question_id'] for r in rows}) == 8
+          assert all(r['provenance'] == 'synthetic_template_unreviewed' for r in rows)
+          assert all(set(r['expected']['correct']).isdisjoint(r['expected']['missing']) for r in rows)
+          print('PASS: 48 synthetic examples, 8 questions, labels structurally consistent')
+          PY
