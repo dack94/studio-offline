@@ -216,23 +216,61 @@ class MainActivity : Activity() {
    val recognized=mutableListOf<String>()
    val missing=mutableListOf<String>()
    val normalized=norm(response)
+   val tokens=normalized.split(" ").filter { it.isNotBlank() }
+   fun containsPhrase(phrase:String):Boolean {
+    val words=norm(phrase).split(" ").filter { it.isNotBlank() }
+    return words.isNotEmpty() && tokens.windowed(words.size).any { it==words }
+   }
+   fun mentions(vararg names:String)=names.any { containsPhrase(it) }
    for(i in 0 until concepts.length()) {
     val concept=concepts.getJSONObject(i)
     val variants=concept.getJSONArray("alternatives")
-    val matched=(0 until variants.length()).any { j ->
-     val variant=norm(variants.getString(j))
-     variant.isNotBlank() && Regex("(^| )"+Regex.escape(variant)+"( |$)").containsMatchIn(normalized)
-    }
+    val matched=(0 until variants.length()).any { j -> containsPhrase(variants.getString(j)) } ||
+     when(index) {
+      0 -> when(i) {
+       0 -> mentions("celiaco")
+       1 -> mentions("mesenterica superiore")
+       else -> mentions("mesenterica inferiore")
+      }
+      1 -> when(i) {
+       0 -> mentions("surrenale media","surrenali medie","surrenalica media")
+       1 -> mentions("renale","renali","arteria renale","arterie renali")
+       else -> mentions("gonadica","gonadiche","testicolare","testicolari","ovarica","ovariche")
+      }
+      2 -> when(i) {
+       0 -> mentions("gastrica sinistra")
+       1 -> mentions("epatica comune")
+       else -> mentions("splenica","lienale")
+      }
+      else -> false
+     }
     if(matched) recognized.add(concept.getString("label")) else missing.add(concept.getString("label"))
    }
-   val wrongRenal= index==0 && (normalized.contains("renal") || normalized.contains("surrenal") || normalized.contains("gonadic"))
-   val outcome=when {
-    recognized.size==concepts.length() && !wrongRenal -> "CORRETTA (corrispondenza testuale)"
-    wrongRenal -> "ERRATA: hai indicato un ramo viscerale pari, non impari"
-    recognized.isNotEmpty() -> "PARZIALE: alcuni concetti attesi non sono stati riconosciuti"
-    else -> "ERRATA O NON PERTINENTE: nessun concetto atteso riconosciuto"
+   val contradictions=mutableListOf<String>()
+   if(index==0) {
+    if(mentions("renale","renali","arteria renale","arterie renali")) contradictions.add("arterie renali: sono rami viscerali pari")
+    if(mentions("surrenale media","surrenali medie")) contradictions.add("arterie surrenali medie: sono rami viscerali pari")
+    if(mentions("gonadica","gonadiche","testicolare","ovarica")) contradictions.add("arterie gonadiche: sono rami viscerali pari")
    }
-   result.text="ESITO: $outcome\\n\\nRICONOSCIUTI: ${recognized.ifEmpty { listOf("nessuno") }.joinToString(", ")}\\nMANCANTI: ${missing.ifEmpty { listOf("nessuno") }.joinToString(", ")}\\n\\nRIFERIMENTO: $reference\\n\\nControllo testuale offline: può non riconoscere parafrasi e sinonimi non presenti nella chiave."
+   if(index==1) {
+    if(mentions("mesenterica inferiore")) contradictions.add("arteria mesenterica inferiore: è un ramo viscerale impari")
+    if(mentions("mesenterica superiore")) contradictions.add("arteria mesenterica superiore: è un ramo viscerale impari")
+    if(mentions("tronco celiaco")) contradictions.add("tronco celiaco: è un ramo viscerale impari")
+   }
+   val outcome=when {
+    contradictions.isNotEmpty() -> "RISPOSTA CON ERRORI"
+    recognized.size==concepts.length() -> "CORRETTA (concetti riconosciuti)"
+    recognized.isNotEmpty() -> "PARZIALE"
+    else -> "NON PERTINENTE O NON RICONOSCIUTA"
+   }
+   result.text=listOf(
+    "ESITO: $outcome",
+    "CORRETTI: "+recognized.ifEmpty { listOf("nessuno") }.joinToString(", "),
+    "ERRORI: "+contradictions.ifEmpty { listOf("nessuno rilevato") }.joinToString("; "),
+    "MANCANTI: "+missing.ifEmpty { listOf("nessuno") }.joinToString(", "),
+    "RIFERIMENTO: $reference",
+    "Controllo offline basato su termini anatomici: non è una valutazione semantica completa."
+   ).joinToString("\n\n")
    return
   }
   if(!modelFile.exists()) { result.text="Scarica prima Qwen 2.5. Dopo il download la valutazione è offline.";return }
