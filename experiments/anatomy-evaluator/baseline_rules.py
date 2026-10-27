@@ -29,7 +29,7 @@ def evaluate(question,answer):
   raise ValueError("Baseline currently covers only paired/unpaired abdominal aorta questions")
  correct=[x for x in target if mentions(answer,x)]
  missing=[x for x in target if x not in correct]
- incorrect=[x for x in other if mentions(answer,x)]
+ incorrect=[x+(" (impari)" if x in IMPARI else " (pari)") for x in other if mentions(answer,x)]
  outcome=("parziale_con_errore" if correct else "errata") if incorrect else ("corretta" if not missing else ("parziale" if correct else "errata"))
  return {"correct":correct,"missing":missing,"incorrect":incorrect,"outcome":outcome}
 def main():
