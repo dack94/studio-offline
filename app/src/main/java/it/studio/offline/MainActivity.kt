@@ -227,7 +227,7 @@ class MainActivity : Activity() {
    }
    val wrongRenal= index==0 && (normalized.contains("renal") || normalized.contains("surrenal") || normalized.contains("gonadic"))
    val outcome=when {
-    recognized.size==concepts.length && !wrongRenal -> "CORRETTA (corrispondenza testuale)"
+    recognized.size==concepts.length() && !wrongRenal -> "CORRETTA (corrispondenza testuale)"
     wrongRenal -> "ERRATA: hai indicato un ramo viscerale pari, non impari"
     recognized.isNotEmpty() -> "PARZIALE: alcuni concetti attesi non sono stati riconosciuti"
     else -> "ERRATA O NON PERTINENTE: nessun concetto atteso riconosciuto"
