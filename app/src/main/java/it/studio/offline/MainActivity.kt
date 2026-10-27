@@ -60,7 +60,7 @@ class MainActivity : Activity() {
   root.addView(Button(this).apply { text="Importa PDF";setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE) },importPdfCode) } })
   root.addView(Button(this).apply { text="Genera domande dal PDF (bozze)";setOnClickListener { generateDrafts() } })
   root.addView(Button(this).apply { text="Rivedi e approva bozze";setOnClickListener { reviewDrafts() } })
-  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference",(0 until q.optJSONArray("concepts")!!.length()).joinToString("; ") { q.getJSONArray("concepts").getJSONObject(it).getString("label") })+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
+  root.addView(Button(this).apply { text="Mostra riferimento";setOnClickListener { val q=questions.getJSONObject(index);AlertDialog.Builder(this@MainActivity).setTitle("Fonte").setMessage(q.optString("reference").ifBlank { q.optJSONArray("concepts")?.let { arr -> (0 until arr.length()).joinToString("; ") { arr.getJSONObject(it).getString("label") } } ?: "Riferimento non disponibile" }+"\n"+q.optString("source","")).setPositiveButton("Chiudi",null).show() } })
   root.addView(Button(this).apply { text="Importa pacchetto di studio verificato (JSON)"; setOnClickListener { val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="application/json"; addCategory(Intent.CATEGORY_OPENABLE) };startActivityForResult(intent,importPackCode) } })
   root.addView(TextView(this).apply { text="Le domande predefinite si possono valutare con Qwen usando la chiave di risposta integrata; non sono ricavate dai tuoi PDF. La valutazione è indicativa, verifica sempre la correttezza.";textSize=13f })
   root.addView(Button(this).apply { text="Scarica Qwen 2.5 0.5B (547 MB, solo una volta)"; setOnClickListener { downloadModel() } })
@@ -207,13 +207,37 @@ class MainActivity : Activity() {
  private fun evaluate() {
   val response=answer.text.toString().trim()
   if(response.isEmpty()){Toast.makeText(this,"Inserisci una risposta",Toast.LENGTH_SHORT).show();return}
-  if(!modelFile.exists()) { result.text="Scarica prima Qwen 2.5. Dopo il download la valutazione è offline.";return }
   val q=questions.getJSONObject(index)
 
   val reference=if(importedPack)q.getString("reference") else (0 until q.getJSONArray("concepts").length()).joinToString("; ") { q.getJSONArray("concepts").getJSONObject(it).getString("label") }
   val source=if(importedPack)q.getString("source") else "Chiave delle domande dimostrative integrata nell’app (non tratta da PDF)"
+  if(!importedPack) {
+   val concepts=q.getJSONArray("concepts")
+   val recognized=mutableListOf<String>()
+   val missing=mutableListOf<String>()
+   val normalized=norm(response)
+   for(i in 0 until concepts.length()) {
+    val concept=concepts.getJSONObject(i)
+    val variants=concept.getJSONArray("alternatives")
+    val matched=(0 until variants.length()).any { j ->
+     val variant=norm(variants.getString(j))
+     variant.isNotBlank() && Regex("(^| )"+Regex.escape(variant)+"( |$)").containsMatchIn(normalized)
+    }
+    if(matched) recognized.add(concept.getString("label")) else missing.add(concept.getString("label"))
+   }
+   val wrongRenal= index==0 && (normalized.contains("renal") || normalized.contains("surrenal") || normalized.contains("gonadic"))
+   val outcome=when {
+    recognized.size==concepts.length && !wrongRenal -> "CORRETTA (corrispondenza testuale)"
+    wrongRenal -> "ERRATA: hai indicato un ramo viscerale pari, non impari"
+    recognized.isNotEmpty() -> "PARZIALE: alcuni concetti attesi non sono stati riconosciuti"
+    else -> "ERRATA O NON PERTINENTE: nessun concetto atteso riconosciuto"
+   }
+   result.text="ESITO: $outcome\\n\\nRICONOSCIUTI: ${recognized.ifEmpty { listOf("nessuno") }.joinToString(", ")}\\nMANCANTI: ${missing.ifEmpty { listOf("nessuno") }.joinToString(", ")}\\n\\nRIFERIMENTO: $reference\\n\\nControllo testuale offline: può non riconoscere parafrasi e sinonimi non presenti nella chiave."
+   return
+  }
+  if(!modelFile.exists()) { result.text="Scarica prima Qwen 2.5. Dopo il download la valutazione è offline.";return }
   val question=q.getString("question")
-  val generic=setOf("e cosi che funziona","non lo so","boh","non saprei","ok","ciao","si","no","non ricordo","non ho capito")
+  val generic=setOf("e cosi che funziona","non lo so","boh","non saprei","ok","ciao","si","no","non ricordo","non ho capito","pai pai","pai pao")
   if(norm(response) in generic || response.length<5) {
    result.text="RISPOSTA NON PERTINENTE\\nLa risposta non contiene elementi anatomici valutabili.\\n\\nRisposta di riferimento: $reference\\nFonte: $source"
    return
