@@ -32,6 +32,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Recupera firma persistente APK
+        uses: actions/cache@v4
+        with:
+          path: app/debug.keystore
+          key: studio-offline-debug-signing-v1
+      - name: Crea firma debug al primo avvio
+        run: |
+          if [ ! -f app/debug.keystore ]; then
+            keytool -genkeypair -alias studiooffline -keyalg RSA -keysize 2048 -validity 10000 -keystore app/debug.keystore -storepass android -keypass android -dname "CN=Studio Offline Debug,O=Studio Offline,C=IT" -noprompt
+          fi
       - name: Compila APK debug installabile
         run: |
           set -o pipefail
