@@ -1,0 +1,17 @@
+name: Anatomy evaluator regression tests
+on:
+  push:
+    paths:
+      - 'experiments/anatomy-evaluator/**'
+      - '.github/workflows/anatomy-evaluator-tests.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check anatomy evaluation regression examples
+        run: python experiments/anatomy-evaluator/test_baseline.py
