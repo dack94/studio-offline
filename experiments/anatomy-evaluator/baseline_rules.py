@@ -19,7 +19,7 @@ def norm(s):
  return " ".join(re.findall(r"[a-z0-9]+",s.casefold()))
 def mentions(s,term):
  text=" "+norm(s)+" "
- return any(" "+norm(variant)+" " in text for variant in ALIASES[term])
+ return any(" "+norm(variant)+" " in text for variant in ALIASES[term]) or (term=="mesenterica inferiore" and " mesenterica superiore e inferiore " in text)
 def evaluate(question,answer):
  if "viscerali pari" in norm(question):
   target,other=PAI,IMPARI
