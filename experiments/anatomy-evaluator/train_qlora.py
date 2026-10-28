@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """QLoRA supervised fine-tuning. Requires a CUDA GPU; not intended for the Android device."""
 import argparse, json, random
+from dataset_guard import load_training_rows
 from pathlib import Path
 
 def main():
@@ -10,6 +11,8 @@ def main():
     p.add_argument("--output",default="anatomy-lora")
     p.add_argument("--epochs",type=float,default=2)
     a=p.parse_args()
+    rows=load_training_rows(a.data)
+    random.Random(42).shuffle(rows)
     import torch
     from datasets import Dataset
     from transformers import AutoTokenizer,AutoModelForCausalLM,BitsAndBytesConfig
@@ -17,10 +20,6 @@ def main():
     from trl import SFTTrainer, SFTConfig
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU required for this QLoRA training script")
-    rows=[json.loads(s) for s in Path(a.data).read_text(encoding="utf-8").splitlines() if s.strip()]
-    if len(rows)<100:
-        raise ValueError("Training requires at least 100 expert-reviewed cases; examples.jsonl is illustrative only.")
-    random.Random(42).shuffle(rows)
     tokenizer=AutoTokenizer.from_pretrained(a.model)
     def format_row(row):
         prompt=("Valuta la risposta dello studente esclusivamente rispetto al riferimento. "
