@@ -16,8 +16,8 @@ jobs:
       - name: Check anatomy evaluation regression examples
         run: python experiments/anatomy-evaluator/test_baseline.py
 
-      - name: Validate training dataset admission rules
-        run: python -m unittest discover -s experiments/anatomy-evaluator -p 'test_dataset_guard.py' -v
+      - name: Validate dataset and benchmark integrity
+        run: python -m unittest discover -s experiments/anatomy-evaluator -p 'test_*.py' -v
 
       - name: Compile experiment Python scripts
         run: python -m compileall -q experiments/anatomy-evaluator

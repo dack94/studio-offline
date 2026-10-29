@@ -17,3 +17,21 @@ I dati in `examples.jsonl` sono **esempi iniziali illustrativi**, non un dataset
 
 ## Limiti
 Un 1.5B specializzato potrebbe migliorare, ma non è garantito. La qualità va misurata su domande mai viste. La valutazione automatica non sostituisce la verifica anatomica umana.
+
+## Integrità del benchmark
+
+`evaluate.py` confronta i file JSONL nell'ordine delle righe. Per evitare di
+associare predizioni a casi sbagliati, assegnare a **ogni risposta** un
+`case_id` univoco e stabile nel gold e riportare lo stesso `case_id` nelle
+predizioni (non usare `question_id`, perché una domanda può avere più risposte).
+
+Esempio di riga delle predizioni:
+```json
+{"case_id":"caso-0001","predicted":{"correct":["concetto A"],"missing":[],"incorrect":[],"outcome":"corretta"}}
+```
+
+Il benchmark rifiuta ID mancanti, duplicati o fuori ordine, JSON non valido,
+etichette incomplete e dataset vuoti. I vecchi file senza `case_id` rimangono
+compatibili, ma l'allineamento è soltanto posizionale e viene segnalato con
+un avviso: **non usarli per dichiarare risultati scientifici affidabili**.
+Questi test verificano il software, non l'accuratezza anatomica del modello.
