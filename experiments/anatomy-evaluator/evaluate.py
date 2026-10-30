@@ -6,6 +6,7 @@ Legacy files without case_id are supported, but only compared positionally.
 """
 import argparse
 import json
+import re
 from collections import Counter
 
 OUTCOMES = {"corretta", "parziale", "parziale_con_errore", "errata"}
@@ -33,14 +34,27 @@ def load(path):
 def _labels(value, label):
     if not isinstance(value, dict) or value.get("outcome") not in OUTCOMES:
         raise ValueError(f"{label}: invalid outcome")
+    concepts = []
     for field in CONCEPT_FIELDS:
-        concepts = value.get(field)
-        if not isinstance(concepts, list) or any(
-            not isinstance(item, str) or not item.strip() for item in concepts
+        items = value.get(field)
+        if not isinstance(items, list) or any(
+            not isinstance(item, str) or not item.strip() for item in items
         ):
             raise ValueError(f"{label}: {field} must be list of nonempty strings")
-        if len(concepts) != len(set(concepts)):
-            raise ValueError(f"{label}: duplicate {field} concepts")
+        concepts.extend(" ".join(re.findall(r"\\w+", item.casefold())) for item in items)
+    if len(concepts) != len(set(concepts)):
+        raise ValueError(f"{label}: duplicate/overlapping concept labels")
+
+    correct, missing, incorrect = (value[k] for k in CONCEPT_FIELDS)
+    outcome = value["outcome"]
+    valid = {
+        "corretta": bool(correct) and not missing and not incorrect,
+        "parziale": bool(correct) and bool(missing) and not incorrect,
+        "parziale_con_errore": bool(correct) and bool(incorrect),
+        "errata": not correct and bool(missing or incorrect),
+    }[outcome]
+    if not valid:
+        raise ValueError(f"{label}: concept lists inconsistent with {outcome}")
     return value
 
 
