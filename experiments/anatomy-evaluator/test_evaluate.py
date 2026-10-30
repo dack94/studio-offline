@@ -73,6 +73,49 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Different numbers"):
             evaluate([case(), case("two")], [case()])
 
+    def test_rejects_inconsistent_gold_outcome(self):
+        gold = case()
+        gold["expected"]["missing"] = ["B"]
+        with self.assertRaisesRegex(ValueError, "Gold row 1: concept lists inconsistent"):
+            evaluate([gold], [case()])
+
+    def test_rejects_inconsistent_prediction_outcome(self):
+        prediction = case()
+        prediction["expected"]["missing"] = ["B"]
+        with self.assertRaisesRegex(ValueError, "Prediction row 1: concept lists inconsistent"):
+            evaluate([case()], [prediction])
+
+    def test_rejects_cross_field_overlap(self):
+        prediction = case()
+        prediction["expected"] = {
+            "correct": ["A"], "missing": ["a!"], "incorrect": [], "outcome": "parziale"
+        }
+        with self.assertRaisesRegex(ValueError, "overlapping concept labels"):
+            evaluate([case()], [prediction])
+
+    def test_rejects_normalized_duplicate_concepts(self):
+        prediction = case()
+        prediction["expected"]["correct"] = ["A", "a!"]
+        with self.assertRaisesRegex(ValueError, "duplicate/overlapping"):
+            evaluate([case()], [prediction])
+
+    def test_rejects_empty_errata_labels(self):
+        prediction = case()
+        prediction["expected"] = {
+            "correct": [], "missing": [], "incorrect": [], "outcome": "errata"
+        }
+        with self.assertRaisesRegex(ValueError, "concept lists inconsistent"):
+            evaluate([case()], [prediction])
+
+    def test_accepts_valid_partial_with_error(self):
+        gold = case(outcome="parziale_con_errore")
+        gold["expected"] = {
+            "correct": ["A"], "missing": ["B"], "incorrect": ["C"],
+            "outcome": "parziale_con_errore"
+        }
+        prediction = {"case_id": "case-1", "predicted": gold["expected"]}
+        self.assertEqual(evaluate([gold], [prediction])["outcome_accuracy"], 1.0)
+
     def test_load_rejects_empty_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "empty.jsonl"
