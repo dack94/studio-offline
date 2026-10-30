@@ -31,7 +31,12 @@ Esempio di riga delle predizioni:
 ```
 
 Il benchmark rifiuta ID mancanti, duplicati o fuori ordine, JSON non valido,
-etichette incomplete e dataset vuoti. I vecchi file senza `case_id` rimangono
+etichette incomplete e dataset vuoti.
+Inoltre il benchmark rifiuta etichette **contraddittorie** sia nel gold sia
+nelle predizioni: ad esempio `corretta` con concetti mancanti, `errata` con
+concetti corretti, o lo stesso concetto in più liste (ignorando maiuscole e
+punteggiatura). Questi controlli seguono le regole strutturali di
+`dataset_guard.py`; non certificano la verità anatomica delle etichette. I vecchi file senza `case_id` rimangono
 compatibili, ma l'allineamento è soltanto posizionale e viene segnalato con
 un avviso: **non usarli per dichiarare risultati scientifici affidabili**.
 Questi test verificano il software, non l'accuratezza anatomica del modello.
