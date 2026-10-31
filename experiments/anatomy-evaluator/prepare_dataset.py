@@ -1,68 +1,67 @@
 #!/usr/bin/env python3
-"""Validate annotated anatomy cases and split by question to avoid paraphrase leakage."""
+"""Fail-closed, question-level splits of human-reviewed anatomy training data."""
 import argparse
 import json
 import random
-import re
 from collections import defaultdict
 from pathlib import Path
 
-LABELS={"corretta","parziale","parziale_con_errore","errata"}
-FIELDS=("correct","missing","incorrect")
+from dataset_guard import _normalized, load_training_rows
 
-def normalize(s):
-    return " ".join(re.findall(r"\w+",s.casefold()))
 
-def validate(row,n):
-    for key in ("question","reference","student_answer"):
-        if not isinstance(row.get(key),str) or not row[key].strip():
-            raise ValueError(f"Row {n}: missing nonempty {key}")
-    expected=row.get("expected")
-    if not isinstance(expected,dict) or expected.get("outcome") not in LABELS:
-        raise ValueError(f"Row {n}: invalid expected.outcome")
-    for key in FIELDS:
-        if not isinstance(expected.get(key),list) or any(not isinstance(v,str) for v in expected[key]):
-            raise ValueError(f"Row {n}: expected.{key} must be list[str]")
-    if expected["outcome"]=="corretta" and (expected["missing"] or expected["incorrect"]):
-        raise ValueError(f"Row {n}: inconsistent correct outcome")
-    if expected["outcome"]=="parziale_con_errore" and not expected["incorrect"]:
-        raise ValueError(f"Row {n}: missing incorrect concepts")
-    if expected["outcome"]=="parziale" and expected["incorrect"]:
-        raise ValueError(f"Row {n}: incorrect concepts require error label")
-    if expected["outcome"]=="errata" and expected["correct"]:
-        raise ValueError(f"Row {n}: errata with correct concepts; use parziale_con_errore")
-    return row
+def prepare_splits(input_path, output_dir, seed=42):
+    """Validate before writing anything; keep all answers to a question together.
+
+    The training partition must itself satisfy train_qlora.py admission rules.
+    This is not a substitute for manual topic-level leakage checks.
+    """
+    rows = load_training_rows(input_path)
+    groups = defaultdict(list)
+    for row in rows:
+        groups[_normalized(row["question"])].append(row)
+
+    # Sorting makes group assignment stable even if input JSONL rows are reordered.
+    keys = sorted(groups)
+    random.Random(seed).shuffle(keys)
+    test_count = max(1, round(len(keys) * 0.1))
+    val_count = max(1, round(len(keys) * 0.1))
+    partitions = {
+        "test": keys[:test_count],
+        "validation": keys[test_count:test_count + val_count],
+        "train": keys[test_count + val_count:],
+    }
+    train_keys = partitions["train"]
+    train_cases = sum(len(groups[key]) for key in train_keys)
+    if len(train_keys) < 10 or train_cases < 100:
+        raise ValueError(
+            "Training split needs >=100 reviewed cases and >=10 distinct questions "
+            f"after holdout; found {train_cases} cases and {len(train_keys)} questions"
+        )
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    counts = {}
+    for name, subset in partitions.items():
+        split_rows = [row for key in subset for row in groups[key]]
+        (out / f"{name}.jsonl").write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in split_rows),
+            encoding="utf-8",
+        )
+        counts[name] = (len(split_rows), len(subset))
+    return counts
+
 
 def main():
-    p=argparse.ArgumentParser()
-    p.add_argument("input")
-    p.add_argument("--out",default="splits")
-    p.add_argument("--seed",type=int,default=42)
-    a=p.parse_args()
-    groups=defaultdict(list)
-    seen=set()
-    for n,line in enumerate(Path(a.input).read_text(encoding="utf-8").splitlines(),1):
-        if not line.strip():
-            continue
-        row=validate(json.loads(line),n)
-        key=(normalize(row["question"]),normalize(row["student_answer"]))
-        if key in seen:
-            raise ValueError(f"Row {n}: duplicate question/answer")
-        seen.add(key)
-        groups[normalize(row["question"])].append(row)
-    keys=list(groups)
-    if len(keys)<10:
-        raise ValueError("Need >=10 distinct questions for meaningful question-level train/val/test split")
-    random.Random(a.seed).shuffle(keys)
-    test_count=max(1,round(len(keys)*.1))
-    val_count=max(1,round(len(keys)*.1))
-    partitions={"test":keys[:test_count],"validation":keys[test_count:test_count+val_count],
-                "train":keys[test_count+val_count:]}
-    out=Path(a.out);out.mkdir(parents=True,exist_ok=True)
-    for name,subset in partitions.items():
-        rows=[row for key in subset for row in groups[key]]
-        (out/f"{name}.jsonl").write_text("".join(json.dumps(row,ensure_ascii=False)+"\n" for row in rows),encoding="utf-8")
-        print(f"{name}: {len(rows)} cases, {len(subset)} questions")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input")
+    parser.add_argument("--out", default="splits")
+    parser.add_argument("--seed", type=int, default=42)
+    args = parser.parse_args()
+    counts = prepare_splits(args.input, args.out, args.seed)
+    for name, (cases, questions) in counts.items():
+        print(f"{name}: {cases} cases, {questions} questions")
     print("Warning: additionally review topic-level leakage; similar questions can share facts.")
-if __name__=="__main__":
+
+
+if __name__ == "__main__":
     main()
