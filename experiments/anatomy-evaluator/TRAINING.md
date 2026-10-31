@@ -35,3 +35,29 @@ Ogni esempio utilizzabile per addestramento deve aggiungere i campi `question_id
 Questi valori sono **uno schema di esempio, non una revisione realmente effettuata**. Compilarli soltanto dopo un controllo umano documentato. Il metadato da solo non dimostra competenza del revisore né correttezza anatomica; occorre una verifica indipendente delle fonti e degli esempi. I 48 esempi sintetici iniziali restano esclusi finché non vengono revisionati individualmente e riclassificati.
 
 I test automatici verificano soltanto la struttura del dataset e le regole di ammissione, **non la correttezza medica**.
+
+
+### Preparazione sicura degli split
+
+Prima di addestrare, creare train/validation/test da un unico JSONL di casi
+revisionati, mantenendo tutte le risposte alla stessa domanda nello stesso
+insieme:
+
+```bash
+python experiments/anatomy-evaluator/prepare_dataset.py casi_revisionati.jsonl --out splits --seed 42
+python experiments/anatomy-evaluator/train_qlora.py --data splits/train.jsonl
+```
+
+Il preparatore applica **gli stessi controlli di ammissione** di
+`dataset_guard.py` prima di scrivere qualsiasi split: blocca dati
+sintetici non revisionati, duplicati, revisioni mancanti ed etichette
+contraddittorie. Controlla anche che **dopo** aver riservato validation e test
+rimangano almeno **100 casi revisionati e 10 domande distinte nel train**;
+altrimenti non crea i file. Servono quindi più di 100 casi nel dataset di
+partenza, distribuiti su un numero sufficiente di domande.
+
+La suddivisione è deterministica rispetto al seed e non cambia se si
+riordinano le righe del JSONL. Resta obbligatorio verificare manualmente che
+domande diverse non condividano argomenti o fatti che provochino leakage.
+Le fixture dei test con metadati di revisione fittizi non costituiscono
+revisioni umane reali.
