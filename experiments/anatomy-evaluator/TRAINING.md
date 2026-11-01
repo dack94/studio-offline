@@ -56,6 +56,13 @@ rimangano almeno **100 casi revisionati e 10 domande distinte nel train**;
 altrimenti non crea i file. Servono quindi più di 100 casi nel dataset di
 partenza, distribuiti su un numero sufficiente di domande.
 
+Il controllo verifica inoltre che una domanda normalizzata abbia **un solo
+`question_id` e un riferimento coerente** in tutte le sue risposte. Se due
+righe della stessa domanda riportano riferimenti diversi, la preparazione
+si interrompe: correggere le fonti e riesaminare le etichette prima di
+riprovare. La normalizzazione ignora differenze di maiuscole e punteggiatura,
+ma **non** stabilisce l'equivalenza scientifica di formulazioni diverse.
+
 La suddivisione è deterministica rispetto al seed e non cambia se si
 riordinano le righe del JSONL. Resta obbligatorio verificare manualmente che
 domande diverse non condividano argomenti o fatti che provochino leakage.

@@ -69,6 +69,8 @@ def load_training_rows(path, min_rows=100, min_questions=10):
     rows = []
     seen = set()
     question_ids = {}
+    question_text_ids = {}
+    question_references = {}
     for index, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
@@ -81,6 +83,13 @@ def load_training_rows(path, min_rows=100, min_questions=10):
         if qid in question_ids and question_ids[qid] != question:
             raise ValueError(f"Row {index}: question_id maps to different questions")
         question_ids[qid] = question
+        if question in question_text_ids and question_text_ids[question] != qid:
+            raise ValueError(f"Row {index}: same question has multiple question_ids")
+        question_text_ids[question] = qid
+        reference = _normalized(row["reference"])
+        if question in question_references and question_references[question] != reference:
+            raise ValueError(f"Row {index}: conflicting references for same question")
+        question_references[question] = reference
         key = (question, _normalized(row["student_answer"]))
         if key in seen:
             raise ValueError(f"Row {index}: duplicate question/answer pair")
