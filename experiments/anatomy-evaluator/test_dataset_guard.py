@@ -85,6 +85,32 @@ class DatasetGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "future"):
             validate_row(row, 1)
 
+    def test_rejects_conflicting_reference_for_same_question(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "train.jsonl"
+            data = [fixture(q, a) for q in range(10) for a in range(10)]
+            data[1]["reference"] = "concetto A; concetto C"
+            write_rows(path, data)
+            with self.assertRaisesRegex(ValueError, "conflicting references"):
+                load_training_rows(path)
+
+    def test_rejects_multiple_ids_for_same_question(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "train.jsonl"
+            data = [fixture(q, a) for q in range(10) for a in range(10)]
+            data[1]["question_id"] = "alias-for-fixture-0"
+            write_rows(path, data)
+            with self.assertRaisesRegex(ValueError, "multiple question_ids"):
+                load_training_rows(path)
+
+    def test_reference_normalization_allows_formatting_variants(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "train.jsonl"
+            data = [fixture(q, a) for q in range(10) for a in range(10)]
+            data[1]["reference"] = "CONCETTO A, concetto B!"
+            write_rows(path, data)
+            self.assertEqual(len(load_training_rows(path)), 100)
+
     def test_rejects_question_id_collision(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "train.jsonl"
