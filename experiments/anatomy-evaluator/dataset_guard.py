@@ -27,6 +27,8 @@ def validate_row(row, index):
     for field in ("question_id", "question", "reference", "student_answer", "provenance", "source"):
         if not _nonempty(row.get(field)):
             raise ValueError(f"Row {index}: missing nonempty {field}")
+    if "case_id" in row and not _nonempty(row["case_id"]):
+        raise ValueError(f"Row {index}: case_id must be a nonempty string")
     if row["provenance"].casefold() in UNREVIEWED_PROVENANCE or "unreviewed" in row["provenance"].casefold():
         raise ValueError(f"Row {index}: unreviewed provenance is not training-ready")
     review = row.get("review")
@@ -68,6 +70,7 @@ def load_training_rows(path, min_rows=100, min_questions=10):
     path = Path(path)
     rows = []
     seen = set()
+    seen_case_ids = set()
     question_ids = {}
     question_text_ids = {}
     question_references = {}
@@ -78,6 +81,10 @@ def load_training_rows(path, min_rows=100, min_questions=10):
             row = validate_row(json.loads(line), index)
         except json.JSONDecodeError as exc:
             raise ValueError(f"Row {index}: invalid JSON") from exc
+        if "case_id" in row:
+            if row["case_id"] in seen_case_ids:
+                raise ValueError(f"Row {index}: duplicate case_id")
+            seen_case_ids.add(row["case_id"])
         qid = row["question_id"]
         question = _normalized(row["question"])
         if qid in question_ids and question_ids[qid] != question:
