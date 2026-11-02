@@ -39,6 +39,22 @@ class DatasetGuardTests(unittest.TestCase):
             rows = load_training_rows(path)
             self.assertEqual(len(rows), 100)
 
+    def test_rejects_blank_case_id(self):
+        row = fixture()
+        row["case_id"] = "  "
+        with self.assertRaisesRegex(ValueError, "case_id must be a nonempty string"):
+            validate_row(row, 1)
+
+    def test_rejects_duplicate_explicit_case_ids(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "train.jsonl"
+            data = [fixture(q, a) for q in range(10) for a in range(10)]
+            data[0]["case_id"] = "same-case"
+            data[1]["case_id"] = "same-case"
+            write_rows(path, data)
+            with self.assertRaisesRegex(ValueError, "duplicate case_id"):
+                load_training_rows(path)
+
     def test_rejects_unreviewed_synthetic(self):
         row = fixture()
         row["provenance"] = "synthetic_template_unreviewed"
