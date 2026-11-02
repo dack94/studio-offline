@@ -68,3 +68,19 @@ riordinano le righe del JSONL. Resta obbligatorio verificare manualmente che
 domande diverse non condividano argomenti o fatti che provochino leakage.
 Le fixture dei test con metadati di revisione fittizi non costituiscono
 revisioni umane reali.
+
+### Identificativi stabili per il benchmark
+
+`prepare_dataset.py` conserva gli eventuali `case_id` già assegnati e,
+per i casi legacy che ne sono privi, genera un identificativo deterministico
+`auto-<sha256>` dalla domanda e dalla risposta normalizzate. Lo stesso caso
+mantiene il proprio ID anche se cambia l'ordine delle righe o il seed dello
+split. Il preparatore blocca gli ID duplicati, anche quando un ID esplicito
+coincide con uno generato automaticamente, prima di scrivere i file.
+
+Gli ID generati sono **identificativi tecnici, non anonimizzazione**: i file
+contengono ancora le risposte originali e un hash non elimina eventuali dati
+personali. Non pubblicare dati reali senza una procedura appropriata di
+minimizzazione e gestione del consenso. Per il benchmark, riportare il
+`case_id` dello split di test in ogni riga delle predizioni: non ricostruirlo
+a partire dall'ordine delle righe.

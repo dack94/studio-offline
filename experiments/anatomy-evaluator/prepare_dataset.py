@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed, question-level splits of human-reviewed anatomy training data."""
 import argparse
+import hashlib
 import json
 import random
 from collections import defaultdict
@@ -9,13 +10,35 @@ from pathlib import Path
 from dataset_guard import _normalized, load_training_rows
 
 
+def assign_case_ids(rows):
+    """Preserve explicit IDs; assign stable content-derived IDs to legacy cases.
+
+    Hashes are identifiers, NOT anonymization of the underlying student answers.
+    """
+    assigned = []
+    seen = set()
+    for row in rows:
+        case_id = row.get("case_id")
+        if case_id is None:
+            key = json.dumps(
+                [_normalized(row["question"]), _normalized(row["student_answer"])],
+                ensure_ascii=False, separators=(",", ":"),
+            )
+            case_id = "auto-" + hashlib.sha256(key.encode("utf-8")).hexdigest()
+        if case_id in seen:
+            raise ValueError("duplicate case_id after automatic assignment")
+        seen.add(case_id)
+        assigned.append({**row, "case_id": case_id})
+    return assigned
+
+
 def prepare_splits(input_path, output_dir, seed=42):
     """Validate before writing anything; keep all answers to a question together.
 
     The training partition must itself satisfy train_qlora.py admission rules.
     This is not a substitute for manual topic-level leakage checks.
     """
-    rows = load_training_rows(input_path)
+    rows = assign_case_ids(load_training_rows(input_path))
     groups = defaultdict(list)
     for row in rows:
         groups[_normalized(row["question"])].append(row)
