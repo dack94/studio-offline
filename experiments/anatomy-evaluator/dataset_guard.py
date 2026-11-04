@@ -27,6 +27,9 @@ def validate_row(row, index):
     for field in ("question_id", "question", "reference", "student_answer", "provenance", "source"):
         if not _nonempty(row.get(field)):
             raise ValueError(f"Row {index}: missing nonempty {field}")
+    for field in ("question", "reference", "student_answer"):
+        if not _normalized(row[field]):
+            raise ValueError(f"Row {index}: {field} has no alphanumeric content")
     if "case_id" in row and not _nonempty(row["case_id"]):
         raise ValueError(f"Row {index}: case_id must be a nonempty string")
     if row["provenance"].casefold() in UNREVIEWED_PROVENANCE or "unreviewed" in row["provenance"].casefold():
@@ -50,7 +53,10 @@ def validate_row(row, index):
         values = expected.get(field)
         if not isinstance(values, list) or any(not _nonempty(v) for v in values):
             raise ValueError(f"Row {index}: expected.{field} must be nonempty strings in a list")
-        concepts.extend(_normalized(v) for v in values)
+        normalized_values = [_normalized(v) for v in values]
+        if any(not value for value in normalized_values):
+            raise ValueError(f"Row {index}: expected.{field} contains empty normalized concept")
+        concepts.extend(normalized_values)
     if len(concepts) != len(set(concepts)):
         raise ValueError(f"Row {index}: duplicate/overlapping concept labels")
     correct, missing, incorrect = (expected[k] for k in FIELDS)
