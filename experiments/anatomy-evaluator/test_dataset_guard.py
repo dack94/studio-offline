@@ -47,6 +47,22 @@ class DatasetGuardTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "no alphanumeric content"):
                     validate_row(row, 1)
 
+    def test_rejects_underscore_only_core_text(self):
+        for field in ("question", "reference", "student_answer"):
+            with self.subTest(field=field):
+                row = fixture()
+                row[field] = "___"
+                with self.assertRaisesRegex(ValueError, "no alphanumeric content"):
+                    validate_row(row, 1)
+
+    def test_rejects_underscore_only_concepts(self):
+        for field in ("correct", "missing", "incorrect"):
+            with self.subTest(field=field):
+                row = fixture()
+                row["expected"][field].append("___")
+                with self.assertRaisesRegex(ValueError, "empty normalized concept"):
+                    validate_row(row, 1)
+
     def test_rejects_punctuation_only_concept(self):
         for field in ("correct", "missing", "incorrect"):
             with self.subTest(field=field):
