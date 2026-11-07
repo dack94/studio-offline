@@ -28,7 +28,7 @@ def validate_row(row, index):
         if not _nonempty(row.get(field)):
             raise ValueError(f"Row {index}: missing nonempty {field}")
     for field in ("question", "reference", "student_answer"):
-        if not _normalized(row[field]):
+        if not any(char.isalnum() for char in row[field]):
             raise ValueError(f"Row {index}: {field} has no alphanumeric content")
     if "case_id" in row and not _nonempty(row["case_id"]):
         raise ValueError(f"Row {index}: case_id must be a nonempty string")
@@ -54,7 +54,7 @@ def validate_row(row, index):
         if not isinstance(values, list) or any(not _nonempty(v) for v in values):
             raise ValueError(f"Row {index}: expected.{field} must be nonempty strings in a list")
         normalized_values = [_normalized(v) for v in values]
-        if any(not value for value in normalized_values):
+        if any(not any(char.isalnum() for char in value) for value in normalized_values):
             raise ValueError(f"Row {index}: expected.{field} contains empty normalized concept")
         concepts.extend(normalized_values)
     if len(concepts) != len(set(concepts)):
