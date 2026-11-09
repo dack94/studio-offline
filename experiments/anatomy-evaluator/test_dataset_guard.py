@@ -95,6 +95,19 @@ class DatasetGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "distinct questions"):
                 load_training_rows(path)
 
+    def test_rejects_noncanonical_review_dates(self):
+        for value in ("20200101", "2020-1-01", "2020-01-1", "2020-01-01T00:00:00", 20200101):
+            with self.subTest(value=value):
+                row = fixture()
+                row["review"]["reviewed_at"] = value
+                with self.assertRaisesRegex(ValueError, "invalid review.reviewed_at"):
+                    validate_row(row, 1)
+
+    def test_accepts_canonical_review_date(self):
+        row = fixture()
+        row["review"]["reviewed_at"] = "2020-02-29"
+        self.assertIs(validate_row(row, 1), row)
+
     def test_rejects_future_review(self):
         row = fixture()
         row["review"]["reviewed_at"] = "2999-01-01"
