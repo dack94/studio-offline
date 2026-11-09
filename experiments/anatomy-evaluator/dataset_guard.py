@@ -37,7 +37,10 @@ def validate_row(row, index):
     if not _nonempty(review.get("reviewer_id")):
         raise ValueError(f"Row {index}: missing reviewer_id")
     try:
-        reviewed = date.fromisoformat(review["reviewed_at"])
+        reviewed_at = review["reviewed_at"]
+        if not isinstance(reviewed_at, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_at):
+            raise ValueError("review date must use YYYY-MM-DD")
+        reviewed = date.fromisoformat(reviewed_at)
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Row {index}: invalid review.reviewed_at (YYYY-MM-DD)") from exc
     if reviewed > date.today():
