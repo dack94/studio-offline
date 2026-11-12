@@ -39,6 +39,38 @@ class DatasetGuardTests(unittest.TestCase):
             rows = load_training_rows(path)
             self.assertEqual(len(rows), 100)
 
+    def test_rejects_punctuation_only_core_text(self):
+        for field in ("question", "reference", "student_answer"):
+            with self.subTest(field=field):
+                row = fixture()
+                row[field] = "?!..."
+                with self.assertRaisesRegex(ValueError, "no alphanumeric content"):
+                    validate_row(row, 1)
+
+    def test_rejects_underscore_only_core_text(self):
+        for field in ("question", "reference", "student_answer"):
+            with self.subTest(field=field):
+                row = fixture()
+                row[field] = "___"
+                with self.assertRaisesRegex(ValueError, "no alphanumeric content"):
+                    validate_row(row, 1)
+
+    def test_rejects_underscore_only_concepts(self):
+        for field in ("correct", "missing", "incorrect"):
+            with self.subTest(field=field):
+                row = fixture()
+                row["expected"][field].append("___")
+                with self.assertRaisesRegex(ValueError, "empty normalized concept"):
+                    validate_row(row, 1)
+
+    def test_rejects_punctuation_only_concept(self):
+        for field in ("correct", "missing", "incorrect"):
+            with self.subTest(field=field):
+                row = fixture()
+                row["expected"][field].append("?!...")
+                with self.assertRaisesRegex(ValueError, "empty normalized concept"):
+                    validate_row(row, 1)
+
     def test_rejects_blank_case_id(self):
         row = fixture()
         row["case_id"] = "  "
