@@ -41,7 +41,11 @@ def _labels(value, label):
             not isinstance(item, str) or not item.strip() for item in items
         ):
             raise ValueError(f"{label}: {field} must be list of nonempty strings")
-        concepts.extend(" ".join(re.findall(r"\w+", item.casefold())) for item in items)
+        for item in items:
+            normalized = " ".join(re.findall(r"\w+", item.casefold()))
+            if not any(char.isalnum() for char in normalized):
+                raise ValueError(f"{label}: {field} contains empty normalized concept")
+            concepts.append(normalized)
     if len(concepts) != len(set(concepts)):
         raise ValueError(f"{label}: duplicate/overlapping concept labels")
 

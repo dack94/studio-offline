@@ -99,6 +99,24 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate/overlapping"):
             evaluate([case()], [prediction])
 
+    def test_rejects_punctuation_only_concepts(self):
+        for field in ("correct", "missing", "incorrect"):
+            with self.subTest(field=field):
+                gold = case()
+                prediction = case()
+                prediction["expected"][field].append("?!...")
+                with self.assertRaisesRegex(ValueError, "empty normalized concept"):
+                    evaluate([gold], [prediction])
+
+    def test_rejects_underscore_only_concepts(self):
+        for field in ("correct", "missing", "incorrect"):
+            with self.subTest(field=field):
+                gold = case()
+                prediction = case()
+                prediction["expected"][field].append("___")
+                with self.assertRaisesRegex(ValueError, "empty normalized concept"):
+                    evaluate([gold], [prediction])
+
     def test_rejects_empty_errata_labels(self):
         prediction = case()
         prediction["expected"] = {
