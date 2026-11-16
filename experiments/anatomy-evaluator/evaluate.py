@@ -31,6 +31,10 @@ def load(path):
     return rows
 
 
+def _normalize_concept(value):
+    return " ".join(re.findall(r"\w+", value.casefold()))
+
+
 def _labels(value, label):
     if not isinstance(value, dict) or value.get("outcome") not in OUTCOMES:
         raise ValueError(f"{label}: invalid outcome")
@@ -42,7 +46,7 @@ def _labels(value, label):
         ):
             raise ValueError(f"{label}: {field} must be list of nonempty strings")
         for item in items:
-            normalized = " ".join(re.findall(r"\w+", item.casefold()))
+            normalized = _normalize_concept(item)
             if not any(char.isalnum() for char in normalized):
                 raise ValueError(f"{label}: {field} contains empty normalized concept")
             concepts.append(normalized)
@@ -100,7 +104,11 @@ def evaluate(gold, predictions):
         expected = _labels(g.get("expected"), f"Gold row {index}")
         actual = _labels(_prediction(p), f"Prediction row {index}")
         outcomes += expected["outcome"] == actual["outcome"]
-        exact += all(set(expected[k]) == set(actual[k]) for k in CONCEPT_FIELDS)
+        exact += all(
+            {_normalize_concept(item) for item in expected[k]}
+            == {_normalize_concept(item) for item in actual[k]}
+            for k in CONCEPT_FIELDS
+        )
         by_class[(expected["outcome"], actual["outcome"])] += 1
     return {
         "total": len(gold),

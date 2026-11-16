@@ -25,6 +25,21 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         self.assertEqual(metrics["exact_concept_sets"], 1.0)
         self.assertTrue(metrics["case_id_verified"])
 
+    def test_exact_concepts_ignore_case_and_punctuation(self):
+        gold = case()
+        prediction = case()
+        prediction["expected"]["correct"] = ["a!"]
+        metrics = evaluate([gold], [prediction])
+        self.assertEqual(metrics["exact_concept_sets"], 1.0)
+
+    def test_exact_concepts_still_detect_different_labels(self):
+        gold = case()
+        prediction = case()
+        prediction["expected"]["correct"] = ["B"]
+        metrics = evaluate([gold], [prediction])
+        self.assertEqual(metrics["outcome_accuracy"], 1.0)
+        self.assertEqual(metrics["exact_concept_sets"], 0.0)
+
     def test_rejects_swapped_predictions(self):
         gold = [case("one"), case("two")]
         predictions = [{"case_id": "two", "predicted": gold[1]["expected"]},
